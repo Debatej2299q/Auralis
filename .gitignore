@@ -1,0 +1,34 @@
+*.iml
+.gradle/
+/local.properties
+/.idea
+.android/
+.DS_Store
+build/
+/build
+/out
+/captures
+.externalNativeBuild
+.cxx
+.kotlin/
+local.properties
+*.jks
+*.keystore
+!debug.keystore
+node_modules/
+*.log
+
+# This checkout lives inside a sandboxed home directory. Keep the tool
+# caches and shell dotfiles out of the repository.
+.npm/
+.cache/
+.local/
+.config/
+.agents/
+.claude/
+.claude.json
+.claude.json.rea.backup
+.bash_history
+.bashrc
+.profile
+.bash_logout
