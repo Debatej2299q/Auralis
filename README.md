@@ -12,6 +12,7 @@ Library ──► Moods ──► Playback  (+ optional YouTube search / link do
 - Reads everything Android's MediaStore exposes (Android 10+ via `READ_MEDIA_AUDIO`, older devices via `READ_EXTERNAL_STORAGE`).
 - Songs, albums, artists, playlists, liked songs, recently added and most-played views.
 - One shared ExoPlayer with a `MediaSessionService`, so playback survives the screen turning off and gets notification, lock-screen, headset and Bluetooth controls.
+- A media notification with artwork and previous / play-pause / next actions that works while the app is in the background or the screen is off.
 - Shuffle, three repeat modes, speed control, seek, queue reordering, sleep timer with an 8-second fade-out.
 - Synced lyrics from a sidecar `.lrc` file next to the audio file (`Song.lrc`).
 - Listening stats and history stored in Room.
@@ -42,6 +43,12 @@ Ten presets repaint the UI and gently retune playback at the same time. Auto-tun
 - The bundled engine is **yt-dlp 2025.11.12** (from [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp)). A button in Discover pulls the latest release binary when YouTube changes something.
 - Everything degrades gracefully offline: the local library, playlists and moods keep working, and Discover shows an offline banner.
 
+### Share to Auralis
+- Auralis registers as a share target for text, so it appears in YouTube's and any browser's share sheet.
+- Share a video (or any yt-dlp supported link) and the app opens, reads the link, and queues the download automatically using the format and quality chosen in Discover.
+- The lookup runs on the download engine's own scope, so leaving the app does not cancel the download.
+- No confirmation dialog, no copy-pasting: share → it lands in your downloads and shows up in the library.
+
 ## How the on-device engine works
 
 ```
@@ -64,7 +71,7 @@ runs as a local process — phone ⇄ YouTube directly
 Grab the APK from a GitHub Actions run or a release, then install it:
 
 ```bash
-adb install -r Auralis-1.0.0-debug.apk
+adb install -r Auralis-debug.apk
 ```
 
 Requires Android 7.0 (API 24) or newer. The debug build installs as `dev.auralis.debug`, so it can live beside a release build.
@@ -106,7 +113,7 @@ export AURALIS_KEY_PASSWORD=…
 
 `.github/workflows/android.yml` runs on every push to `main`/`master`, on pull requests, and manually via **Actions → Build APK → Run workflow**.
 
-- **Debug APK** job: builds `assembleDebug` and uploads `Auralis-1.0.0-debug.apk` as the `Auralis-debug-apk` artifact.
+- **Debug APK** job: builds `assembleDebug` and uploads `Auralis-debug.apk` as the `Auralis-debug-apk` artifact.
 - **Signed release APK** job: runs on tags beginning with `v` (e.g. `v1.0.0`) or when a GitHub Release is published; uploads `Auralis-release-apk` and attaches the APK to the release.
 
 To sign releases in CI, add these repository secrets (Settings → Secrets and variables → Actions):

@@ -38,7 +38,7 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/Auralis-1.0.0-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk out/Auralis-debug.apk
           ls -lh out
 
       - name: Upload APK
@@ -92,8 +92,8 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/Auralis-1.0.0.apk || \
-            cp app/build/outputs/apk/release/app-release-unsigned.apk out/Auralis-1.0.0.apk
+          cp app/build/outputs/apk/release/app-release.apk out/Auralis-release.apk || \
+            cp app/build/outputs/apk/release/app-release-unsigned.apk out/Auralis-release.apk
           ls -lh out
 
       - name: Upload APK

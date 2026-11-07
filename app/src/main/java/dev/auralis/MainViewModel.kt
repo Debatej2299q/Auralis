@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.auralis.core.AppSettings
+import dev.auralis.core.ShareInbox
 import dev.auralis.core.estimateBytes
 import dev.auralis.data.ListenStats
 import dev.auralis.data.PlaylistSummary
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -254,6 +256,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
         }
 
+        // links shared from YouTube / any other app
+        viewModelScope.launch {
+            ShareInbox.pending.collect { text ->
+                if (text == null) return@collect
+                ShareInbox.consume()
+                downloadSharedLink(text)
+            }
+        }
+
         if (hasAudioPermission()) {
             importLibrary(silent = true)
         }
@@ -287,6 +298,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onPermissionResult() {
         _library.update { it.copy(permission = hasAudioPermission()) }
         if (hasAudioPermission()) importLibrary(silent = false)
+        if (Build.VERSION.SDK_INT >= 33) {
+            val notifications = ContextCompat.checkSelfPermission(
+                getApplication<Application>(),
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!notifications) {
+                _messages.tryEmit(
+                    "Notifications are off - music still plays, but the lock-screen controls stay hidden",
+                )
+            }
+        }
     }
 
     fun importLibrary(silent: Boolean = false) {
@@ -498,6 +520,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (downloader.enqueue(result, format, quality.kbps)) {
             _search.update { it.copy(preview = null) }
             _messages.tryEmit("Downloading \"${result.title}\"")
+        }
+    }
+
+    /**
+     * Entry point for "Share -> Auralis" from YouTube or any browser.
+     * The link is resolved with the local yt-dlp engine and queued straight
+     * away using the format/quality picked in Discover.
+     */
+    fun downloadSharedLink(text: String) {
+        val url = ShareInbox.extractLink(text)
+        if (url == null) {
+            _messages.tryEmit("That share didn't include a link")
+            return
+        }
+        viewModelScope.launch {
+            val current = prefs.settings.first()
+            downloader.enqueueFromUrl(
+                url = url,
+                format = AudioFormat.from(current.downloadFormat),
+                kbps = AudioQuality.from(current.downloadQuality).kbps,
+            )
         }
     }
 

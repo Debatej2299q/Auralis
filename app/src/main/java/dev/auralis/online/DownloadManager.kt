@@ -115,6 +115,31 @@ class DownloadManager(
         return true
     }
 
+    /**
+     * Resolves a shared URL with the local yt-dlp engine and queues it.
+     * Runs on the downloader's own scope so closing the UI does not cancel
+     * the lookup before the download starts.
+     */
+    fun enqueueFromUrl(url: String, format: AudioFormat, kbps: Int): Boolean {
+        if (!network.isConnected()) {
+            _messages.tryEmit("You're offline - downloads need a connection")
+            return false
+        }
+        _messages.tryEmit("Reading the shared link…")
+        scope.launch {
+            runCatching { engine.lookup(url) }
+                .onSuccess { result ->
+                    if (enqueue(result, format, kbps)) {
+                        _messages.tryEmit("Saving \"${result.title}\" to your downloads")
+                    }
+                }
+                .onFailure { error ->
+                    _messages.tryEmit(error.message?.take(160) ?: "Couldn't read that link")
+                }
+        }
+        return true
+    }
+
     fun cancel(id: String) {
         update(id) { it.copy(status = DownloadStatus.Cancelled, message = "Cancelled") }
         runCatching { YoutubeDL.getInstance().destroyProcessById(id) }

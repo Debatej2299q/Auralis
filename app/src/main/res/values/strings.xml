@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Auralis</string>
+    <string name="notification_channel_name">Now playing</string>
+    <string name="notification_channel_description">Playback controls and the current track</string>
 </resources>
