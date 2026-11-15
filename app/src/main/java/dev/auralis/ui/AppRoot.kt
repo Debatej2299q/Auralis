@@ -1,5 +1,6 @@
 package dev.auralis.ui
 
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -66,10 +67,25 @@ fun AuralisRoot(vm: MainViewModel) {
             contract = ActivityResultContracts.RequestMultiplePermissions(),
         ) { vm.onPermissionResult() }
 
+        var askedNotifications by rememberSaveable { mutableStateOf(false) }
+        val notificationLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted -> vm.onNotificationPermissionResult(granted) }
+
         LaunchedEffect(Unit) {
             if (!library.permission && !askedPermission) {
                 askedPermission = true
                 permissionLauncher.launch(vm.requiredPermissions())
+            }
+        }
+
+        // Android 13+: the playback notification needs its own grant. Ask as
+        // soon as something starts playing instead of silently hiding the
+        // lock-screen / shade controls.
+        LaunchedEffect(player.isPlaying) {
+            if (player.isPlaying && !askedNotifications && !vm.hasNotificationPermission()) {
+                askedNotifications = true
+                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
 

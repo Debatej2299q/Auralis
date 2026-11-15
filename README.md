@@ -41,6 +41,7 @@ Ten presets repaint the UI and gently retune playback at the same time. Auto-tun
 - Files land in the app's private external music folder, so **no storage permission is needed for downloads**.
 - Audio thumbnails are written next to the track and used as artwork.
 - The bundled engine is **yt-dlp 2025.11.12** (from [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp)). A button in Discover pulls the latest release binary when YouTube changes something.
+- YouTube sometimes answers the very first request of a session with a transient `403` while it negotiates a player client. Searches, link lookups and downloads retry that automatically (three attempts, short backoff, resumable partial files), so the error no longer reaches you.
 - Everything degrades gracefully offline: the local library, playlists and moods keep working, and Discover shows an offline banner.
 
 ### Share to Auralis

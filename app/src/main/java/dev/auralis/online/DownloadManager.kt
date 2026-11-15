@@ -9,9 +9,11 @@ import dev.auralis.core.formatBytes
 import dev.auralis.data.MusicRepository
 import dev.auralis.data.SOURCE_DOWNLOAD
 import dev.auralis.data.Track
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -201,6 +203,7 @@ class DownloadManager(
 
             val videoId = videoIdOf(start.url)
             val dir = repository.downloadsDir
+            val cacheDir = engine.cacheDirectory()
             val request = YoutubeDLRequest(start.url).apply {
                 addOption("-f", "bestaudio/best")
                 addOption("-x")
@@ -213,27 +216,58 @@ class DownloadManager(
                 addOption("--no-mtime")
                 addOption("--newline")
                 addOption("--no-warnings")
-                addOption("--socket-timeout", "20")
+                addOption("--socket-timeout", "25")
+                // YouTube intermittently refuses the first request of a session
+                // with a 403 or a stalled socket. Retry inside yt-dlp, and
+                // resume from the partial file instead of starting over.
+                addOption("--retries", "10")
+                addOption("--fragment-retries", "10")
+                addOption("--extractor-retries", "3")
+                addOption("--retry-sleep", "1")
+                addOption("--continue")
+                if (cacheDir != null) addOption("--cache-dir", cacheDir)
                 if (start.format == AudioFormat.M4A || start.format == AudioFormat.MP3) {
                     addOption("--embed-metadata")
                 }
             }
 
             try {
-                YoutubeDL.getInstance().execute(request, taskId) { progress, eta, line ->
-                    val stage = when {
-                        line.contains("[ExtractAudio]") || line.contains("[ffmpeg]") -> DownloadStatus.Converting
-                        line.contains("[download]") -> DownloadStatus.Downloading
-                        else -> null
-                    }
-                    update(taskId) { current ->
-                        current.copy(
-                            progress = if (progress > 0f) (progress / 100f).coerceIn(0.02f, 0.99f) else current.progress,
-                            etaSeconds = eta,
-                            status = stage ?: current.status,
-                        )
+                var attempt = 1
+                while (true) {
+                    try {
+                        YoutubeDL.getInstance().execute(request, taskId) { progress, eta, line ->
+                            val stage = when {
+                                line.contains("[ExtractAudio]") || line.contains("[ffmpeg]") -> DownloadStatus.Converting
+                                line.contains("[download]") -> DownloadStatus.Downloading
+                                else -> null
+                            }
+                            update(taskId) { current ->
+                                current.copy(
+                                    progress = if (progress > 0f) (progress / 100f).coerceIn(0.02f, 0.99f) else current.progress,
+                                    etaSeconds = eta,
+                                    status = stage ?: current.status,
+                                )
+                            }
+                        }
+                        break
+                    } catch (canceled: YoutubeDL.CanceledException) {
+                        throw canceled
+                    } catch (t: Throwable) {
+                        // A user cancel is final, never retried.
+                        if (t is CancellationException) throw t
+                        if (snapshot(taskId)?.status == DownloadStatus.Cancelled) return@withLock
+                        if (attempt >= MAX_ATTEMPTS || !YtFailures.isTransient(t)) throw t
+                        attempt++
+                        update(taskId) {
+                            it.copy(
+                                message = "YouTube stumbled - retrying ($attempt/$MAX_ATTEMPTS)",
+                                etaSeconds = -1L,
+                            )
+                        }
+                        delay(RETRY_DELAY_MS * attempt)
                     }
                 }
+                update(taskId) { it.copy(message = null) }
 
                 val audio = locateAudio(dir, videoId, start.format.ext)
                 if (audio == null || !audio.exists() || audio.length() < 1024L) {
@@ -308,5 +342,11 @@ class DownloadManager(
         }
         return candidate?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) }
             ?: "audio_${System.currentTimeMillis()}"
+    }
+
+    private companion object {
+        /** One clean try, then two silent re-tries for transient 403s. */
+        const val MAX_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 1200L
     }
 }

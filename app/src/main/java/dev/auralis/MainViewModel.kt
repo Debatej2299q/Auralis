@@ -298,16 +298,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onPermissionResult() {
         _library.update { it.copy(permission = hasAudioPermission()) }
         if (hasAudioPermission()) importLibrary(silent = false)
-        if (Build.VERSION.SDK_INT >= 33) {
-            val notifications = ContextCompat.checkSelfPermission(
-                getApplication<Application>(),
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!notifications) {
-                _messages.tryEmit(
-                    "Notifications are off - music still plays, but the lock-screen controls stay hidden",
-                )
-            }
+        if (!hasNotificationPermission()) {
+            _messages.tryEmit(
+                "Notifications are off - music still plays, but the lock-screen controls stay hidden",
+            )
+        }
+    }
+
+    /** Notifications are always allowed before Android 13. */
+    fun hasNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+            getApplication<Application>(),
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+
+    fun onNotificationPermissionResult(granted: Boolean) {
+        if (!granted) {
+            _messages.tryEmit(
+                "No notification permission - allow it in Settings to get the playback panel",
+            )
         }
     }
 
